@@ -390,6 +390,9 @@ bool Context::Init(SDL_Window* window, bool validation, bool want_hdr) {
     VkPhysicalDeviceFeatures supported{};
     vkGetPhysicalDeviceFeatures(physical, &supported);
     features.features.independentBlend = supported.independentBlend;
+    storage_without_format = supported.shaderStorageImageReadWithoutFormat && supported.shaderStorageImageWriteWithoutFormat;
+    features.features.shaderStorageImageReadWithoutFormat = storage_without_format ? VK_TRUE : VK_FALSE;
+    features.features.shaderStorageImageWriteWithoutFormat = storage_without_format ? VK_TRUE : VK_FALSE;
 
     const float priority = 1.0f;
     VkDeviceQueueCreateInfo queue_info{VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO};

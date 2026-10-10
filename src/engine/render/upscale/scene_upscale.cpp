@@ -360,7 +360,9 @@ void SceneRenderer::RecordOpaqueSnapshot(VkCommandBuffer cmd, RenderTarget& outp
 
 void SceneRenderer::RecordUpscaleInputs(VkCommandBuffer cmd, const ViewSetup& view) {
     FrameSlot& slot = slots_[renderer_->FrameIndex()];
-    vkCmdWriteTimestamp2(cmd, VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT, slot.upscale_queries, 0);
+    if (queries_) {
+        vkCmdWriteTimestamp2(cmd, VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT, slot.upscale_queries, 0);
+    }
     UseTargets(cmd, {{&depth_, VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL}, {&motion_, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL}});
     BeginPass(cmd, extent_, {{&motion_, false, {}, true}}, &depth_, true, false);
     gpu::PassPush push;
@@ -390,9 +392,7 @@ void SceneRenderer::RecordUpscaleInputs(VkCommandBuffer cmd, const ViewSetup& vi
     vkCmdEndRendering(cmd);
     UseTargets(cmd, {{&motion_, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL},
                      {&hdr_, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL},
-                     {&opaque_, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL},
-                     {&reactive_, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL}});
-    BeginPass(cmd, extent_, {{&reactive_, false, {}, true}});
+                     {&opaque_, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL}});
     push = gpu::PassPush{};
     push.ids = glm::uvec4(0, 0, 0, view.index);
     static const glm::vec2 flashlight_reactive = [] {
@@ -423,9 +423,14 @@ void SceneRenderer::RecordUpscaleInputs(VkCommandBuffer cmd, const ViewSetup& vi
     push.m[1] = previous_handy_[1];
     previous_handy_[0] = push.f1;
     previous_handy_[1] = push.f2;
-    Fullscreen(cmd, up_reactive_, push);
-    vkCmdEndRendering(cmd);
-    UseTargets(cmd, {{&reactive_, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL}});
+    // The handy history above still advances, so switching to an upscaler that reads the mask starts from the right place.
+    if (up_.backend && up_.backend->UsesReactive()) {
+        UseTargets(cmd, {{&reactive_, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL}});
+        BeginPass(cmd, extent_, {{&reactive_, false, {}, true}});
+        Fullscreen(cmd, up_reactive_, push);
+        vkCmdEndRendering(cmd);
+        UseTargets(cmd, {{&reactive_, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL}});
+    }
 
     // The handy light demodulated out of the upscaler's colour (upscale_demod.frag): the upscaler reconstructs the surfaces
     // without the moving beam and upscale_resolve.frag puts the beam back at the output resolution. PT_HANDY_DEMOD=0 feeds
@@ -462,12 +467,16 @@ void SceneRenderer::RecordUpscaleInputs(VkCommandBuffer cmd, const ViewSetup& vi
         vkCmdEndRendering(cmd);
         UseTargets(cmd, {{&opaque_, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL}, {&handy_factor_, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL}});
     }
-    vkCmdWriteTimestamp2(cmd, VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT, slot.upscale_queries, 1);
+    if (queries_) {
+        vkCmdWriteTimestamp2(cmd, VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT, slot.upscale_queries, 1);
+    }
 }
 
 void SceneRenderer::RecordUpscale(VkCommandBuffer& cmd, float dt) {
     FrameSlot& slot = slots_[renderer_->FrameIndex()];
-    vkCmdWriteTimestamp2(cmd, VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT, slot.upscale_queries, 2);
+    if (queries_) {
+        vkCmdWriteTimestamp2(cmd, VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT, slot.upscale_queries, 2);
+    }
     UseTargets(cmd, {{&exposure_image_, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL}});
     VkClearColorValue value{};
     value.float32[0] = exposure_;
@@ -582,8 +591,10 @@ void SceneRenderer::RecordUpscale(VkCommandBuffer& cmd, float dt) {
         UseTargets(cmd, {{&hdr_, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL}, {&upscaled_, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL}});
         up_.warp_history = true;
     }
-    vkCmdWriteTimestamp2(cmd, VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT, slot.upscale_queries, 3);
-    slot.upscale_timed = true;
+    if (queries_) {
+        vkCmdWriteTimestamp2(cmd, VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT, slot.upscale_queries, 3);
+    }
+    slot.upscale_timed = queries_ != VK_NULL_HANDLE;
 }
 
 void SceneRenderer::ReadUpscaleTimestamps(FrameSlot& slot) {

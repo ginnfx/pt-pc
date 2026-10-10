@@ -136,6 +136,8 @@ public:
     virtual bool Dispatch(const UpscaleDispatch& dispatch) = 0;
     virtual void Release() = 0;
     virtual float MipBias(float render_over_display) const;
+    // Whether Dispatch reads UpscaleDispatch::reactive; when it does not, the reactive mask pass is skipped.
+    virtual bool UsesReactive() const { return true; }
 };
 
 class UpscaleHost : public vk::ContextHooks {

@@ -113,6 +113,7 @@ private:
         uint64_t wait_value = 0;
     };
 
+    VkCommandBuffer BeginContinuation(Frame& frame);
     bool CreateTargets(uint32_t width, uint32_t height);
     void DestroyTargets();
     bool CreateCompositePipeline(VkFormat output_format);
