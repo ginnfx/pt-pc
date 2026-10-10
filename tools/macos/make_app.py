@@ -133,6 +133,8 @@ def main():
             "LSMinimumSystemVersion": MINIMUM_MACOS,
             "LSArchitecturePriority": ["arm64" if arch == "arm64" else "x86_64"],
             "LSApplicationCategoryType": "public.app-category.games",
+            "GCSupportsGameMode": True,
+            "LSSupportsGameMode": True,
             "NSHighResolutionCapable": True,
             "NSSupportsAutomaticGraphicsSwitching": True,
             # the one part of the game that listens for a spoken word (README, What you need)

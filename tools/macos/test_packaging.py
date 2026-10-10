@@ -71,6 +71,7 @@ class PackagingTests(unittest.TestCase):
             self.assertEqual(z.read(prefix + "Resources/" + mac.ICON_FILE), mac.ICON_SOURCE.read_bytes())
             self.assertEqual(info["LSApplicationCategoryType"], "public.app-category.games")
             self.assertTrue(info["GCSupportsGameMode"])
+            self.assertTrue(info["LSSupportsGameMode"])
             self.assertTrue((z.getinfo(prefix + "MacOS/pt").external_attr >> 16) & 0o111)
         result, output = self.payload(archive)
         self.assertEqual(result.returncode, 0, result.stderr)

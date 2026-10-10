@@ -37,6 +37,7 @@ def info(name, executable, identifier, version, microphone=False, game=False):
         # Game Mode only engages in fullscreen for bundles that declare the games category.
         data["LSApplicationCategoryType"] = "public.app-category.games"
         data["GCSupportsGameMode"] = True
+        data["LSSupportsGameMode"] = True
     return data
 
 
