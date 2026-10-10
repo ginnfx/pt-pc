@@ -52,6 +52,11 @@ const vk::Image* PresentFrameGeneration(uint32_t image_index) {
     return hud;
 }
 
+const vk::Image* FrameGenerationUiLayer(uint32_t image_index) {
+    FrameGeneration* fg = UpscaleHost::Get().FrameGen();
+    return fg ? fg->UiLayer(image_index) : nullptr;
+}
+
 void UpdateDlssFrameGeneration(Renderer& renderer, bool wanted) {
     FrameGeneration* fg = UpscaleHost::Get().DlssFrameGenImpl();
     if (!fg) {
@@ -84,12 +89,17 @@ void UpdateFrameGeneration(Renderer& renderer, bool wanted) {
     if (wanted && !fg->Available(reason)) {
         wanted = false;
     }
+    // A generator's swapchain is never HDR, while the renderer keeps the output mode of the swapchain it started with.
+    if (wanted && renderer.OutputMode() != RendererOutputMode::Sdr) {
+        wanted = false;
+    }
     vk::Context& ctx = renderer.Context();
     if (!wanted && !fg->Generating() && !ctx.SwapchainOwner() && !ctx.swapchain_hooks) {
         return;
     }
     if (!renderer.hudless) {
         renderer.hudless = PresentFrameGeneration;
+        renderer.ui_layer = FrameGenerationUiLayer;
     }
     if (fg->Update(wanted)) {
         renderer.Resize(0, 0);
@@ -208,7 +218,7 @@ bool SceneRenderer::BeginUpscaleFrame(VkExtent2D output) {
     if (streamline::Active()) {
         UpdateDlssFrameGeneration(*renderer_, upscale.frame_generation == FrameGenKind::Dlss && generate);
     } else {
-        UpdateFrameGeneration(*renderer_, upscale.frame_generation == FrameGenKind::Fsr && generate);
+        UpdateFrameGeneration(*renderer_, upscale.frame_generation == kNativeFrameGen && generate);
     }
     return active;
 }

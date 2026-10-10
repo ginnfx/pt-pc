@@ -572,7 +572,12 @@ void Renderer::EndFrame(bool draw_ui) {
     rendering.layerCount = 1;
     rendering.colorAttachmentCount = 1;
     rendering.pColorAttachments = &color;
-    const vk::Image* hud = presenting_ && hudless && !xr ? hudless(image_index_) : nullptr;
+    // ImGui goes only onto the swapchain image (below), so a generator that lays its own UI layer over the frames it makes would
+    // show the debug windows every other refresh; such frames are presented without generation.
+    const ImDrawData* imgui = output_mode_ == RendererOutputMode::Sdr && draw_ui && imgui_ready_ ? ImGui::GetDrawData() : nullptr;
+    const bool imgui_on_target = imgui && imgui->TotalVtxCount > 0;
+    const bool generator_ui = ui_layer && ui_layer(image_index_);
+    const vk::Image* hud = presenting_ && hudless && !xr && !(imgui_on_target && generator_ui) ? hudless(image_index_) : nullptr;
     vkCmdBeginRendering(cmd, &rendering);
     Composite(cmd, composite_set_, 0.0f, extent, final_format_);
     if (overlay && !hud && (!xr || xr_frame_.overlay_on_frame)) {
@@ -619,6 +624,26 @@ void Renderer::EndFrame(bool draw_ui) {
                              VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
                              VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, VK_ACCESS_2_SHADER_SAMPLED_READ_BIT,
                              VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+        }
+        // The same UI again on a transparent layer, which the generator lays over the frames it makes; cleared even without UI.
+        if (const vk::Image* layer = ui_layer ? ui_layer(image_index_) : nullptr) {
+            vk::ImageBarrier(cmd, layer->image, VK_IMAGE_ASPECT_COLOR_BIT, VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT, 0, VK_IMAGE_LAYOUT_UNDEFINED,
+                             VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
+                             VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+            color.imageView = layer->view;
+            color.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+            color.clearValue.color = {{0.0f, 0.0f, 0.0f, 0.0f}};
+            vkCmdBeginRendering(cmd, &rendering);
+            if (overlay) {
+                overlay_layer = true;
+                overlay(cmd, layer->view, extent);
+                overlay_layer = false;
+            }
+            vkCmdEndRendering(cmd);
+            color.loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+            vk::ImageBarrier(cmd, layer->image, VK_IMAGE_ASPECT_COLOR_BIT, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+                             VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
+                             VK_ACCESS_2_SHADER_READ_BIT, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
         }
     }
     if (xr) {

@@ -82,6 +82,9 @@ public:
     // frame generation's hooks, applied before swapchain creation and image acquisition
     std::function<FrameStartAction(bool)> frame_start;
     std::function<bool()> swapchain_failed;
+    // A frame generator's UI layer; the overlay draws into it a second time with coverage alpha while overlay_layer is set.
+    std::function<const vk::Image*(uint32_t)> ui_layer;
+    bool overlay_layer = false;
 
     void SetGrainNoise(VkImageView view);
 
