@@ -13,8 +13,6 @@
 
 namespace pt::vk {
 
-VkPipelineCache g_pipeline_cache = VK_NULL_HANDLE;
-
 const char* ResultName(VkResult result) {
     switch (result) {
     case VK_SUCCESS: return "VK_SUCCESS";

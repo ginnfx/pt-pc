@@ -4,8 +4,16 @@ This is an experimental native arm64 port for M-series Macs running macOS 14 or 
 The runtime, Cocoa installer and packaging tools have been built and tested
 on an M1 Pro running macOS 26.6.2, including the full scripted walkthrough.
 The preview 4 test build has also passed the user's manual gameplay checks.
-Microphone and physical controller input, and other Mac/OS combinations still
-need further validation.
+The preview 5 fixes passed manual fullscreen mouse alignment checks and a live
+microphone test on this Mac. Physical controller input and other Mac/OS
+combinations still need further validation. The native installer and its runtime
+are arm64-only; an Intel installer has not been built or validated.
+
+Apple Silicon preview 5 uses version 1.0.4. It incorporates upstream's 1.0.2
+updates, fixes fullscreen menu mouse alignment, installs the supplied icon in
+both game and Setup, requests microphone permission before gameplay, and adds a
+saved PC settings > Sound > Microphone input switch. See the
+[preview 5 release notes](releases/macos-arm64-preview-5.md).
 
 Apple Silicon preview 4 uses version 1.0.3 and adds Apple MetalFX temporal
 upscaling from [ginnfx's PR #1](https://github.com/ignusloki/pt-pc/pull/1), together
@@ -80,6 +88,12 @@ It reuses the same LibOrbisPkg extraction and P.T. recognition rules as Windows.
 The filename alone does not establish that a package contains usable game data.
 The installer copies game archives into a native Mac runtime; it does not convert
 the PS4 executable. No game files are included in the app or setup distribution.
+
+Both the game and native Setup use the supplied P.T. artwork as their default
+Mac icon. The original image and its icon container are in `assets/macos/`;
+packaging copies `pt.icns` into each bundle and sets `CFBundleIconFile` before
+signing. Earlier preview packages without that resource show the generic app
+icon and need a rebuilt package to display the artwork.
 
 If a PKG's game-data image cannot be read, the installer reports an incomplete,
 damaged or unsupported package before creating extracted game files. A full-size
@@ -202,14 +216,33 @@ from the default build. Upscaling uses Apple MetalFX instead (PC settings >
 Upscaling, `upscaler = metalfx`; see [Upscaling](upscaling.md#apple-metalfx)).
 Ray queries remain dependent on capabilities actually
 reported by MoltenVK and the GPU; they are not part of Mac acceptance testing yet.
-The Mac branch includes upstream 1.0.1's DLSS swapchain recovery and Windows
-surface-creation fixes; these do not enable DLSS on Apple Silicon. The upstream
-base remains version 1.0.1. The Mac build and package scripts default to version
-1.0.3 for Apple Silicon preview 4.
+The Mac branch now includes upstream's 1.0.2 source update at `fa6fabb`, while
+retaining the tested MetalFX synchronization, window-transition fixes and optional
+Fast Walk. Version 1.0.4 prepares preview 5 with the updates and fixes described
+above. Preview 4 remains the published release until preview 5 is published.
 Microphone access has a usage description in the game's Info.plist and an
-audio-input entitlement for the hardened runtime. Voice libraries are signed in
-`Contents/Frameworks`; models stay in `Contents/Resources/voice`. The voice
-recognizer uses a baseline ARM64 GGML CPU backend and utility thread priority.
+audio-input entitlement for the hardened runtime. The packaged game requests
+permission at startup when microphone input is On, without opening a recording
+stream. The request is asynchronous, so denying access does not block gameplay.
+macOS remembers the decision; denied access can be changed in System Settings >
+Privacy & Security > Microphone. Headless checks, viewers and file-based voice
+tests do not request permission.
+
+PC Settings > Sound > Microphone input switches capture On or Off immediately
+and saves the choice as `[voice] microphone_enabled = 1` or `0`. On is the default
+for new and existing settings files. Off also disables device selection and the
+microphone test, and skips the permission request at the next launch. The optional
+keyboard/controller microphone trigger remains independent of this choice.
+Turning input On requests permission if macOS has not already recorded a decision.
+The actual microphone still opens only during the voice puzzle or its test.
+See [Apple's microphone authorization documentation](https://developer.apple.com/documentation/bundleresources/requesting-authorization-for-media-capture-on-macos).
+
+Voice libraries and all three
+models are signed/staged under `Contents/Resources/voice`, matching upstream's
+loader. Apple M1, M2/M3 and M4 CPU modules are included and scored at runtime;
+the recognizer uses upstream's rescue model, diagnostics and configurable thread
+priority. The installer uses Microsoft's self-contained .NET runtime and rejects
+Mach-O dependencies that require an OS newer than macOS 14.
 
 ## macOS acceptance checks
 

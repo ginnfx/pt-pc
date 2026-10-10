@@ -39,6 +39,7 @@ class PackagingTests(unittest.TestCase):
         (self.build / "libMoltenVK.dylib").write_bytes(self.magic + b"synthetic graphics library")
         for name in mac.MODELS + mac.VOICE_LIBS:
             (self.build / "voice" / name).write_bytes(self.magic + name.encode() if name in mac.VOICE_LIBS else name.encode())
+        (self.build / "voice/libggml-cpu-fixture.so").write_bytes(self.magic + b"CPU module")
         (self.build / "voice/licenses/MIT.txt").write_text("Synthetic license")
         (self.build / "fonts/font.ttf").write_bytes(b"font fixture")
         for shader in (REPO / "shaders").iterdir():
@@ -61,12 +62,13 @@ class PackagingTests(unittest.TestCase):
             prefix = "pt-port-macos-arm64/P.T..app/Contents/"
             self.assertIn(prefix + "MacOS/pt", z.namelist())
             self.assertIn(prefix + "Frameworks/libMoltenVK.dylib", z.namelist())
-            for name in mac.VOICE_LIBS:
-                self.assertIn(prefix + "Frameworks/" + name, z.namelist())
-                self.assertNotIn(prefix + "Resources/voice/" + name, z.namelist())
+            for name in mac.MODELS + mac.VOICE_LIBS + ("libggml-cpu-fixture.so",):
+                self.assertIn(prefix + "Resources/voice/" + name, z.namelist())
             info = plistlib.loads(z.read(prefix + "Info.plist"))
             self.assertEqual(info["CFBundleExecutable"], "pt")
             self.assertIn("NSMicrophoneUsageDescription", info)
+            self.assertEqual(info["CFBundleIconFile"], mac.ICON_FILE)
+            self.assertEqual(z.read(prefix + "Resources/" + mac.ICON_FILE), mac.ICON_SOURCE.read_bytes())
             self.assertEqual(info["LSApplicationCategoryType"], "public.app-category.games")
             self.assertTrue(info["GCSupportsGameMode"])
             self.assertTrue((z.getinfo(prefix + "MacOS/pt").external_attr >> 16) & 0o111)
@@ -93,6 +95,7 @@ class PackagingTests(unittest.TestCase):
             files[name] = raw
         self.assertEqual(offset, len(data))
         self.assertEqual(files["P.T..app/Contents/MacOS/pt"], self.magic + b"synthetic executable")
+        self.assertEqual(files["P.T..app/Contents/Resources/" + mac.ICON_FILE], mac.ICON_SOURCE.read_bytes())
         self.assertIn("extractor/PT.PkgExtract", files)
         sourcezip = output / "extractor-source.zip"
         with zipfile.ZipFile(sourcezip) as z:
@@ -121,7 +124,7 @@ class PackagingTests(unittest.TestCase):
                 self.assertNotEqual(result.returncode, 0)
 
     def test_incomplete_runtime_refused_before_bundle_creation(self):
-        (self.build / "voice/libggml-cpu.dylib").unlink()
+        (self.build / "voice/libggml-cpu-fixture.so").unlink()
         with self.assertRaisesRegex(RuntimeError, "Missing build output"):
             mac.runtime(self.build, self.root / "incomplete", "1.0.0")
         self.assertFalse((self.root / "incomplete/pt-port-macos-arm64").exists())

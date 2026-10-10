@@ -1,5 +1,7 @@
 #include "engine/render/render_util.h"
 
+#include "engine/render/pipeline_cache_store.h"
+
 #include <cstddef>
 
 #include "engine/core/log.h"
@@ -53,6 +55,7 @@ void UseTargets(VkCommandBuffer cmd, std::initializer_list<TargetUse> uses) {
 }
 
 void BeginLabel(VkCommandBuffer cmd, const char* name) {
+    // the labels are string literals, so the pointer lasts: a lost device reports the last ones the GPU reached
     if (g_checkpoints && vkCmdSetCheckpointNV) {
         vkCmdSetCheckpointNV(cmd, name);
     }
@@ -204,6 +207,7 @@ VkPipeline CreateGraphicsPipeline(VkDevice device, const PipelineDesc& desc) {
             b.dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
             break;
         case BlendMode::ProbeAccumulate:
+            // SSLighting2_SH_MultiBlend's state: colour src + dst src.a, alpha dst.a src.a (the remaining transmittance)
             b.blendEnable = VK_TRUE;
             b.srcColorBlendFactor = VK_BLEND_FACTOR_ONE;
             b.dstColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
@@ -238,7 +242,7 @@ VkPipeline CreateGraphicsPipeline(VkDevice device, const PipelineDesc& desc) {
     info.pDynamicState = &dynamic;
     info.layout = desc.layout;
     VkPipeline pipeline = VK_NULL_HANDLE;
-    if (!vk::Check(vkCreateGraphicsPipelines(device, vk::g_pipeline_cache, 1, &info, nullptr, &pipeline), desc.fragment ? desc.fragment : desc.vertex)) {
+    if (!vk::Check(vk::CreateGraphicsPipelinesCached(device, 1, &info, nullptr, &pipeline), desc.fragment ? desc.fragment : desc.vertex)) {
         pipeline = VK_NULL_HANDLE;
     }
     vkDestroyShaderModule(device, vert, nullptr);
@@ -260,7 +264,7 @@ VkPipeline CreateComputePipeline(VkDevice device, VkPipelineLayout layout, const
     info.stage.pName = "main";
     info.layout = layout;
     VkPipeline pipeline = VK_NULL_HANDLE;
-    if (!vk::Check(vkCreateComputePipelines(device, vk::g_pipeline_cache, 1, &info, nullptr, &pipeline), shader)) {
+    if (!vk::Check(vk::CreateComputePipelinesCached(device, 1, &info, nullptr, &pipeline), shader)) {
         pipeline = VK_NULL_HANDLE;
     }
     vkDestroyShaderModule(device, module, nullptr);
