@@ -4746,6 +4746,7 @@ int RunGame(App& app, pt::Vfs& vfs) {
         ++frame;
         pt::LogSetTick(frame);
         app.scene.AdvanceTime(dt);
+        app.scene.toggles.draw_occlusion = !freecam;
         bool warmed = false;
         if (vr) {
             // VR (docs/vr.md): every waited frame is drawn (or ended without layers): the stereo view, two eyes from one game

@@ -385,6 +385,7 @@ void Renderer::Resize(uint32_t, uint32_t) {
 bool Renderer::BeginFrame(bool present) {
     Frame& frame = frames_[frame_index_];
     ctx_.CheckDeviceLost(vkWaitForFences(ctx_.device, 1, &frame.in_flight, VK_TRUE, UINT64_MAX), "frame fence wait");
+    ctx_.ReclaimUploads(VK_WHOLE_SIZE);
     frame.segments.clear();
     frame.wait = VK_NULL_HANDLE;
     frame.wait_value = 0;
