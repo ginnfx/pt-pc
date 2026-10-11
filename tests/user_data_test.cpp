@@ -157,6 +157,56 @@ int main(int argc, char** argv) {
               "legacy symlink directory is skipped");
     }
 
+    // A linked file is not a migratable save and must not offer to delete the legacy tree.
+    const auto fileLinkLegacy = root / "file-link-legacy";
+    const auto fileLinkDest = root / "file-link-game" / "data";
+    fs::create_directories(fileLinkLegacy);
+    linkError.clear();
+    fs::create_symlink(root / "outside" / "secret", fileLinkLegacy / "PT_Save_Data0", linkError);
+    if (!linkError) {
+        int linkedAsked = 0;
+        report = pt::platform::PrepareUserDataDirectory(fileLinkDest, fileLinkLegacy, true,
+            [&](const fs::path&) { ++linkedAsked; return true; });
+        check(report.success && linkedAsked == 0 && !report.migrated_legacy && !report.removed_legacy &&
+              !report.warnings.empty() && fs::exists(fileLinkLegacy) &&
+              !fs::exists(fileLinkDest / "PT_Save_Data0") && Read(root / "outside" / "secret") == "outside",
+              "linked-only saves neither prompt nor delete the legacy tree");
+    }
+#ifndef _WIN32
+    if (::geteuid() != 0) {
+        const auto unreadable = root / "unreadable-legacy";
+        const auto unreadableDest = root / "unreadable-game" / "data";
+        Write(unreadable / "PT_Save_Data0", "retry after read permission is restored");
+        fs::permissions(unreadable, fs::perms::none, fs::perm_options::replace);
+        report = pt::platform::PrepareUserDataDirectory(unreadableDest, unreadable);
+        const bool retryPending = !report.success && !report.errors.empty() &&
+            !fs::exists(unreadableDest / ".pt-user-data-migration-v1");
+        fs::permissions(unreadable, fs::perms::owner_all, fs::perm_options::replace);
+        report = pt::platform::PrepareUserDataDirectory(unreadableDest, unreadable);
+        check(retryPending && report.success &&
+              Read(unreadableDest / "PT_Save_Data0") == "retry after read permission is restored",
+              "unreadable legacy data remains pending and migrates after permissions recover");
+    }
+#endif
+
+    // The question (1.0.2): Yes moves the saves and deletes the old folder, No leaves it, and neither asks again.
+    const auto askLegacy = root / "ask-legacy" / "pt-port" / "pt";
+    const auto askDest = root / "ask-game" / "data";
+    Write(askLegacy / "PT_Save_Data0", "old save");
+    int asked = 0;
+    report = pt::platform::PrepareUserDataDirectory(askDest, askLegacy, true, [&](const fs::path&) { ++asked; return true; });
+    check(report.success && asked == 1 && report.migrated_legacy && report.removed_legacy && Read(askDest / "PT_Save_Data0") == "old save" &&
+              !fs::exists(askLegacy) && !fs::exists(askLegacy.parent_path()),
+          "Yes moves the saves and deletes the old folder");
+    const auto noLegacy = root / "no-legacy";
+    const auto noDest = root / "no-game" / "data";
+    Write(noLegacy / "PT_Save_Data0", "old save");
+    asked = 0;
+    report = pt::platform::PrepareUserDataDirectory(noDest, noLegacy, true, [&](const fs::path&) { ++asked; return false; });
+    report = pt::platform::PrepareUserDataDirectory(noDest, noLegacy, true, [&](const fs::path&) { ++asked; return false; });
+    check(report.success && asked == 1 && !fs::exists(noDest / "PT_Save_Data0") && Read(noLegacy / "PT_Save_Data0") == "old save",
+          "No keeps the old folder and is not asked again");
+
     fs::remove_all(root);
     return failures ? 1 : 0;
 }
