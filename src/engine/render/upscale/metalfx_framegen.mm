@@ -17,6 +17,10 @@
 #include "engine/core/log.h"
 
 namespace pt {
+
+// MTLFXFrameInterpolator came with the macOS 26 SDK. With an older SDK (the Intel builds use 15.x) the game builds without MetalFX frame
+// generation: the factory below returns nothing and the menu shows it as not in this build.
+#if __has_include(<MetalFX/MTLFXFrameInterpolator.h>)
 namespace {
 
 using Clock = std::chrono::steady_clock;
@@ -677,5 +681,10 @@ private:
 std::unique_ptr<FrameGeneration> CreateMetalFxFrameGeneration(vk::Context& ctx) {
     return std::make_unique<MetalFxFrameGeneration>(ctx);
 }
+#else
+std::unique_ptr<FrameGeneration> CreateMetalFxFrameGeneration(vk::Context&) {
+    return nullptr;
+}
+#endif
 
 }
