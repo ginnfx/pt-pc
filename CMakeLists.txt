@@ -88,6 +88,8 @@ endif()
 if(WIN32)
   enable_language(RC)
   configure_file(assets/pt.rc.in "${CMAKE_BINARY_DIR}/pt.rc" @ONLY)
+  # the icon is read by the resource compiler, which the build does not track: a new pt.ico left the old one in pt.exe
+  set_source_files_properties("${CMAKE_BINARY_DIR}/pt.rc" PROPERTIES OBJECT_DEPENDS "${CMAKE_SOURCE_DIR}/assets/pt.ico")
 endif()
 add_executable(pt WIN32 src/main.cpp)
 if(WIN32)
@@ -141,7 +143,7 @@ if(WIN32 AND EXISTS "${PT_SETUP_PAYLOAD}")
   # linker must not make its own, or the two collide
   set(PT_SETUP_MANIFEST "${CMAKE_SOURCE_DIR}/installer/Native/setup.manifest")
   configure_file(installer/Native/setup.rc.in "${CMAKE_BINARY_DIR}/private-setup.rc" @ONLY)
-  set_source_files_properties("${CMAKE_BINARY_DIR}/private-setup.rc" PROPERTIES OBJECT_DEPENDS "${PT_SETUP_PAYLOAD};${PT_SETUP_MANIFEST}")
+  set_source_files_properties("${CMAKE_BINARY_DIR}/private-setup.rc" PROPERTIES OBJECT_DEPENDS "${PT_SETUP_PAYLOAD};${PT_SETUP_MANIFEST};${CMAKE_SOURCE_DIR}/assets/pt.ico")
   add_executable(pt_setup WIN32 EXCLUDE_FROM_ALL installer/Native/setup.cpp src/engine/platform/http.cpp
     src/engine/platform/update_check.cpp "${CMAKE_BINARY_DIR}/private-setup.rc")
   target_include_directories(pt_setup PRIVATE src installer/Native "${CMAKE_BINARY_DIR}/generated")
@@ -388,3 +390,15 @@ target_link_libraries(pt_display_modes_test PRIVATE pt_engine)
 
 add_executable(pt_pipeline_cache_store_test tests/pipeline_cache_store_test.cpp)
 target_link_libraries(pt_pipeline_cache_store_test PRIVATE pt_engine)
+
+# Keep assertions active in regression tests built with RelWithDebInfo.
+get_property(pt_directory_targets DIRECTORY PROPERTY BUILDSYSTEM_TARGETS)
+foreach(test IN LISTS pt_directory_targets)
+  if(test STREQUAL "pt_tests" OR test MATCHES "^pt_.*_test$")
+    if(MSVC)
+      target_compile_options(${test} PRIVATE /UNDEBUG)
+    else()
+      target_compile_options(${test} PRIVATE -UNDEBUG)
+    endif()
+  endif()
+endforeach()
